@@ -199,6 +199,7 @@ def main():
         trust_remote_code=args.trust_remote_code,
         **model_kwargs,
     )
+    model.config.cache_implementation = "cuda"
 
     if ref_free:
         ref_model = None
@@ -208,6 +209,7 @@ def main():
             trust_remote_code=args.trust_remote_code,
             **model_kwargs_ref,
         )
+        ref_model.config.cache_implementation = "cuda"
 
     # use internal inference functions in DPO trainer
     dpo = DPOInference(
