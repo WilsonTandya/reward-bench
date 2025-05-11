@@ -199,7 +199,6 @@ def main():
         trust_remote_code=args.trust_remote_code,
         **model_kwargs,
     )
-    model.config.cache_implementation = "cuda"
 
     if ref_free:
         ref_model = None
@@ -209,7 +208,18 @@ def main():
             trust_remote_code=args.trust_remote_code,
             **model_kwargs_ref,
         )
-        ref_model.config.cache_implementation = "cuda"
+
+    model.config.cache_implementation = "cuda"
+    model.config.sliding_window = None
+    model.config.sliding_window_size = None
+    if hasattr(model.config, "use_flash_attention_2"):
+        model.config.use_flash_attention_2 = True
+    
+    ref_model.config.cache_implementation = "cuda"
+    ref_model.config.sliding_window = None
+    ref_model.config.sliding_window_size = None
+    if hasattr(ref_model.config, "use_flash_attention_2"):
+        ref_model.config.use_flash_attention_2 = True
 
     # use internal inference functions in DPO trainer
     dpo = DPOInference(
