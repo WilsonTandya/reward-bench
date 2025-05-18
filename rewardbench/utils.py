@@ -37,8 +37,8 @@ from rewardbench.models import REWARD_MODEL_CONFIG
 
 # HuggingFace Hub locations
 # CORE_EVAL_SET = "allenai/reward-bench"
-# CORE_EVAL_SET = "CohereLabsCommunity/multilingual-reward-bench"
-CORE_EVAL_SET = "vanessrw/TA"
+CORE_EVAL_SET = "CohereLabsCommunity/multilingual-reward-bench"
+# CORE_EVAL_SET = "vanessrw/TA"
 
 EXTRA_PREF_SETS = "allenai/pref-test-sets"
 BON_CANDIDATES = "ai2-adapt-dev/HERM_BoN_candidates"  # private until officially supported
@@ -328,10 +328,10 @@ def load_eval_dataset(
     if core_set:
         # raw_dataset = load_dataset(CORE_EVAL_SET, split="filtered")
         
-        # raw_dataset = load_dataset(CORE_EVAL_SET, name="ind_Latn", split="test")
-        # raw_dataset = raw_dataset.rename_column("category", "subset") # Rename 'category' to 'subset' so RewardBench logic works as-is
-
         raw_dataset = load_dataset(CORE_EVAL_SET, split="test")
+        raw_dataset = raw_dataset.rename_column("language", "subset") # Rename 'category' to 'subset' so RewardBench logic works as-is
+
+        # raw_dataset = load_dataset(CORE_EVAL_SET, split="test")
         print(f"[DEBUG] LOADING DATASET (IF): {CORE_EVAL_SET}")
         print(f"[DEBUG] SIZE (IF): {len(raw_dataset)} examples")
 
