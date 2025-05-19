@@ -38,7 +38,7 @@ from rewardbench.models import REWARD_MODEL_CONFIG
 # HuggingFace Hub locations
 # CORE_EVAL_SET = "allenai/reward-bench"
 # CORE_EVAL_SET = "CohereLabsCommunity/multilingual-reward-bench"
-CORE_EVAL_SET = "vanessrw/TA"
+CORE_EVAL_SET = "vanessrw/TA-new"
 
 EXTRA_PREF_SETS = "allenai/pref-test-sets"
 BON_CANDIDATES = "ai2-adapt-dev/HERM_BoN_candidates"  # private until officially supported
