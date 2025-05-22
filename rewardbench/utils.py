@@ -328,13 +328,11 @@ def load_eval_dataset(
     if core_set:
         # raw_dataset = load_dataset(CORE_EVAL_SET, split="filtered")
         
-        raw_dataset = load_dataset(CORE_EVAL_SET, name="hin_Deva", split="test")
+        dataset_name = "hin_Deva"
+        raw_dataset = load_dataset(CORE_EVAL_SET, name=dataset_name, split="test")
         raw_dataset = raw_dataset.rename_column("category", "subset") # Rename 'category' to 'subset' so RewardBench logic works as-is
 
         # raw_dataset = load_dataset(CORE_EVAL_SET, split="test")
-        print(f"[DEBUG] LOADING DATASET (IF): {CORE_EVAL_SET}")
-        print(f"[DEBUG] SIZE (IF): {len(raw_dataset)} examples")
-
 
     else:
         raw_dataset = load_dataset(EXTRA_PREF_SETS)
@@ -358,6 +356,7 @@ def load_eval_dataset(
         raw_dataset = concatenate_datasets(modified_datasets)
 
     print(f"✅ LOADING DATASET: {CORE_EVAL_SET}")
+    print(f"✅ NAME: {dataset_name}")
     print(f"✅ SIZE: {len(raw_dataset)} examples")
 
     # Apply chat template
