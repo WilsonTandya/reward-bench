@@ -328,7 +328,7 @@ def load_eval_dataset(
     if core_set:
         # raw_dataset = load_dataset(CORE_EVAL_SET, split="filtered")
         
-        raw_dataset = load_dataset(CORE_EVAL_SET, name="ind_Latn", split="test")
+        raw_dataset = load_dataset(CORE_EVAL_SET, name="ell_Grek", split="test")
         raw_dataset = raw_dataset.rename_column("category", "subset") # Rename 'category' to 'subset' so RewardBench logic works as-is
 
         # raw_dataset = load_dataset(CORE_EVAL_SET, split="test")
