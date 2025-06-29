@@ -241,9 +241,9 @@ def main():
                 elif winner == loser_text:
                     return 0
                 else:  # if "error"
-                    return 0.5  # effectively a tie
+                    return 0  # effectively a tie
             else:
-                return 0.5
+                return 0
 
         with ThreadPoolExecutor(max_workers=args.num_threads) as executor:
             # Map 'my_function' across the vector, executing in parallel using threads
@@ -350,7 +350,7 @@ def main():
             elif win == loser_text:
                 return 0
             else:  # if "error"
-                return 0.5  # effectively a tie
+                return 0  # effectively a tie
 
         results = [process_shuffled(w, s) for w, s in zip(winners, is_shuffled)]
 
