@@ -88,6 +88,9 @@ def get_args():
     parser.add_argument(
         "--force_local", action="store_true", default=False, help="force local run, even if model is on Together API"
     )
+    parser.add_argument(
+        "--enable_length_normalization", action="store_true", default=False, help="enable length normalization to prevent length bias"
+    )
     args = parser.parse_args()
     return args
 
@@ -140,6 +143,17 @@ def main():
             # max_seq_length=args.vllm_max_seq_length,
         )
         tokenizer = AutoTokenizer.from_pretrained(args.model)
+        
+        # Print tokenizer information for debugging
+        print(f"*** Tokenizer Information ***")
+        print(f"Tokenizer class: {type(tokenizer).__name__}")
+        print(f"Tokenizer name: {tokenizer.name_or_path}")
+        print(f"Vocab size: {tokenizer.vocab_size}")
+        print(f"Model max length: {getattr(tokenizer, 'model_max_length', 'Not set')}")
+        print(f"Chat template: {getattr(tokenizer, 'chat_template', 'Not set')}")
+        print(f"Special tokens: {tokenizer.special_tokens_map}")
+        print(f"*** End Tokenizer Information ***")
+        
         if "Llama-3" in args.model or "llama3-8b" in args.model and "3.1" not in args.model:
             stop_token_ids = [128009]
         else:
@@ -223,7 +237,7 @@ def main():
 
             if len(batch["text_chosen"]) <= 4:  # set up only for 1 or 2 turns
                 winner, request, judgement = run_judge_pair(
-                    prompt, answer_a, answer_b, args.model, multi_turn=mult_turn, model_modifier=model_modifier
+                    prompt, answer_a, answer_b, args.model, multi_turn=mult_turn, model_modifier=model_modifier, enable_length_normalization=args.enable_length_normalization, tokenizer=tokenizer if args.enable_length_normalization else None
                 )
                 if debug:
                     print(f"Prompt: {request}")
@@ -285,8 +299,35 @@ def main():
                 answer_a, answer_b = answer_b, answer_a
 
             system_prompt, user_prompt = format_judge_answers(
-                prompt, answer_a, answer_b, multi_turn=mult_turn, model_modifier=model_modifier
+                prompt, answer_a, answer_b, multi_turn=mult_turn, model_modifier=model_modifier, enable_length_normalization=args.enable_length_normalization, tokenizer=tokenizer if args.enable_length_normalization else None
             )
+
+            # Add length information if normalization is enabled
+            if args.enable_length_normalization:
+                # Calculate response lengths
+                if mult_turn:
+                    response_a_content = answer_a[-1]["content"] if len(answer_a) > 1 else answer_a[1]["content"]
+                    response_b_content = answer_b[-1]["content"] if len(answer_b) > 1 else answer_b[1]["content"]
+                else:
+                    response_a_content = answer_a[1]["content"]
+                    response_b_content = answer_b[1]["content"]
+                
+                # Calculate both word and token counts
+                word_count_a = len(response_a_content.split())
+                word_count_b = len(response_b_content.split())
+                
+                # Calculate token counts if tokenizer is available
+                if tokenizer is not None:
+                    try:
+                        token_count_a = len(tokenizer.encode(response_a_content, add_special_tokens=False))
+                        token_count_b = len(tokenizer.encode(response_b_content, add_special_tokens=False))
+                        length_info = f"\n[Length Information: Response A has {word_count_a} words ({token_count_a} tokens), Response B has {word_count_b} words ({token_count_b} tokens). Remember: length should not influence your judgment. Focus on quality over quantity.]"
+                    except Exception:
+                        length_info = f"\n[Length Information: Response A has {word_count_a} words, Response B has {word_count_b} words. Remember: length should not influence your judgment. Focus on quality over quantity.]"
+                else:
+                    length_info = f"\n[Length Information: Response A has {word_count_a} words, Response B has {word_count_b} words. Remember: length should not influence your judgment. Focus on quality over quantity.]"
+                
+                user_prompt += length_info
 
             if optional_chat_template is not None:
                 optional_chat_template.set_system_message(system_prompt)
