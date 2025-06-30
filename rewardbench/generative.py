@@ -287,115 +287,8 @@ Based on your analysis, which response is better? Respond with either "A" or "B"
 
 
 # format with prompt_template.format(question=question, answer_a=answer_a, answer_b=answer_b)
-def calculate_response_length(response_content, tokenizer=None):
-    """Calculate the length of a response in characters, words, and tokens."""
-    if isinstance(response_content, str):
-        char_count = len(response_content)
-        word_count = len(response_content.split())
-        
-        # Calculate token count if tokenizer is provided
-        token_count = None
-        if tokenizer is not None:
-            try:
-                tokens = tokenizer.encode(response_content, add_special_tokens=False)
-                token_count = len(tokens)
-            except Exception:
-                # Fallback to word count if tokenization fails
-                token_count = word_count
-        
-        return char_count, word_count, token_count
-    return 0, 0, 0
-
-def normalize_response_lengths(response_a, response_b, max_length_ratio=1.5, tokenizer=None):
-    """
-    Normalize response lengths to prevent length bias.
-    
-    Args:
-        response_a: First response content
-        response_b: Second response content  
-        max_length_ratio: Maximum ratio between response lengths (default 1.5)
-        tokenizer: Tokenizer to use for token counting (if None, uses word count)
-    
-    Returns:
-        tuple: (normalized_response_a, normalized_response_b)
-    """
-    if not isinstance(response_a, str) or not isinstance(response_b, str):
-        return response_a, response_b
-    
-    # Use token length if tokenizer is available, otherwise use word length
-    if tokenizer is not None:
-        try:
-            tokens_a = tokenizer.encode(response_a, add_special_tokens=False)
-            tokens_b = tokenizer.encode(response_b, add_special_tokens=False)
-            len_a, len_b = len(tokens_a), len(tokens_b)
-            use_tokens = True
-        except Exception:
-            # Fallback to word length if tokenization fails
-            words_a = response_a.split()
-            words_b = response_b.split()
-            len_a, len_b = len(words_a), len(words_b)
-            use_tokens = False
-    else:
-        words_a = response_a.split()
-        words_b = response_b.split()
-        len_a, len_b = len(words_a), len(words_b)
-        use_tokens = False
-    
-    # If one response is significantly longer, truncate it
-    if len_a > len_b * max_length_ratio:
-        # Truncate response A to be closer in length to response B
-        target_length = int(len_b * max_length_ratio)
-        if use_tokens:
-            # Truncate by tokens and decode back to text
-            truncated_tokens = tokens_a[:target_length]
-            normalized_response_a = tokenizer.decode(truncated_tokens, skip_special_tokens=True)
-        else:
-            # Truncate by words
-            words_a = response_a.split()
-            normalized_response_a = ' '.join(words_a[:target_length])
-        return normalized_response_a, response_b
-    elif len_b > len_a * max_length_ratio:
-        # Truncate response B to be closer in length to response A
-        target_length = int(len_a * max_length_ratio)
-        if use_tokens:
-            # Truncate by tokens and decode back to text
-            truncated_tokens = tokens_b[:target_length]
-            normalized_response_b = tokenizer.decode(truncated_tokens, skip_special_tokens=True)
-        else:
-            # Truncate by words
-            words_b = response_b.split()
-            normalized_response_b = ' '.join(words_b[:target_length])
-        return response_a, normalized_response_b
-    
-    return response_a, response_b
-
-def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_modifier=None, enable_length_normalization=False, tokenizer=None):
+def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_modifier=None):
     kwargs = {}
-    
-    # Calculate response lengths for length bias prevention
-    if multi_turn:
-        # For multi-turn, use the last response (most relevant for comparison)
-        response_a_content = answer_a[-1]["content"] if len(answer_a) > 1 else answer_a[1]["content"]
-        response_b_content = answer_b[-1]["content"] if len(answer_b) > 1 else answer_b[1]["content"]
-    else:
-        response_a_content = answer_a[1]["content"]
-        response_b_content = answer_b[1]["content"]
-    
-    # Apply length normalization if enabled
-    if enable_length_normalization:
-        response_a_content, response_b_content = normalize_response_lengths(response_a_content, response_b_content, tokenizer=tokenizer)
-    
-    char_count_a, word_count_a, token_count_a = calculate_response_length(response_a_content, tokenizer=tokenizer)
-    char_count_b, word_count_b, token_count_b = calculate_response_length(response_b_content, tokenizer=tokenizer)
-    
-    # Add length information to kwargs for potential use in prompts
-    kwargs["char_count_a"] = char_count_a
-    kwargs["word_count_a"] = word_count_a
-    kwargs["char_count_b"] = char_count_b
-    kwargs["word_count_b"] = word_count_b
-    kwargs["token_count_a"] = token_count_a
-    kwargs["token_count_b"] = token_count_b
-    
     if model_modifier == "prometheus":
         if multi_turn:
             raise ValueError("Prometheus prompts do not support multi-turn prompts")
@@ -403,8 +296,8 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
             system_prompt = REL_SYSTEM_PROMPT
             user_prompt = RELATIVE_PROMPT.format(
                 orig_instruction=question,
-                response_A=response_a_content,
-                response_B=response_b_content,
+                response_A=answer_a[1]["content"],
+                response_B=answer_b[1]["content"],
                 score_rubric=AUTOJ_COARSE_SCORE_RUBRIC,
                 **kwargs,
             )
@@ -414,7 +307,7 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
         else:
             system_prompt = ""
             user_prompt = CON_J_PROMPT.format(
-                instruction=question, output_1=response_a_content, output_2=response_b_content
+                instruction=question, output_1=answer_a[1]["content"], output_2=answer_b[1]["content"]
             )
     elif model_modifier == "RISE-Judge":
         if multi_turn:
@@ -422,7 +315,7 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
         else:
             system_prompt = ""
             user_prompt = RISE_Judge_PROMPT.format(
-                instruction=question, output_1=response_a_content, output_2=response_b_content
+                instruction=question, output_1=answer_a[1]["content"], output_2=answer_b[1]["content"]
             )
     elif model_modifier == "offsetbias":
         if multi_turn:
@@ -430,7 +323,7 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
         else:
             system_prompt = ""
             user_prompt = OFFSETBIAS_PROMPT.format(
-                instruction=question, output_1=response_a_content, output_2=response_b_content
+                instruction=question, output_1=answer_a[1]["content"], output_2=answer_b[1]["content"]
             )
     elif model_modifier == "Atla":
         if multi_turn:
@@ -439,8 +332,8 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
             system_prompt = ""
             user_prompt = Atla_PROMPT.format(
                 user_input=question,
-                assistant_response_a=response_a_content,
-                assistant_response_b=response_b_content,
+                assistant_response_a=answer_a[1]["content"],
+                assistant_response_b=answer_b[1]["content"],
             )
     else:
         if multi_turn:
@@ -456,17 +349,12 @@ def format_judge_answers(question, answer_a, answer_b, multi_turn=False, model_m
             )
         else:
             system_prompt = MTBENCH_V2["system_prompt"]
-            # Add length information to the prompt template for better length bias prevention
-            if token_count_a is not None and token_count_b is not None:
-                length_info = f"\n[Note: Response A has {word_count_a} words ({token_count_a} tokens), Response B has {word_count_b} words ({token_count_b} tokens). Remember: length should not influence your judgment.]"
-            else:
-                length_info = f"\n[Note: Response A has {word_count_a} words, Response B has {word_count_b} words. Remember: length should not influence your judgment.]"
             user_prompt = MTBENCH_V2["prompt_template"].format(
                 question=question,
-                answer_a=response_a_content,
-                answer_b=response_b_content,
+                answer_a=answer_a[1]["content"],
+                answer_b=answer_b[1]["content"],
                 **kwargs,
-            ) + length_info
+            )
 
     # gemini adds what was the system prompt before the content, and has no system prompt
     if model_modifier == "gemini":
@@ -609,9 +497,9 @@ def process_judgement(judgment, model_modifier):
 
 
 # noqa adapted from FastChat https://github.com/lm-sys/FastChat/blob/b015f21cb9d0cf3c87d2a5e53008074c537e8be0/fastchat/llm_judge/common.py#L235C1-L312C1
-def run_judge_pair(question, answer_a, answer_b, model, multi_turn=False, model_modifier=None, enable_length_normalization=False, tokenizer=None):
+def run_judge_pair(question, answer_a, answer_b, model, multi_turn=False, model_modifier=None):
     system_prompt, user_prompt = format_judge_answers(
-        question, answer_a, answer_b, multi_turn, model_modifier=model_modifier, enable_length_normalization=enable_length_normalization, tokenizer=tokenizer
+        question, answer_a, answer_b, multi_turn, model_modifier=model_modifier
     )
     winner = "error"
 
@@ -620,7 +508,7 @@ def run_judge_pair(question, answer_a, answer_b, model, multi_turn=False, model_
         winners = []
         judgments = []
         for m in model:
-            winner, _, judgment = run_judge_pair(question, answer_a, answer_b, m, multi_turn, enable_length_normalization=enable_length_normalization, tokenizer=tokenizer)
+            winner, _, judgment = run_judge_pair(question, answer_a, answer_b, m, multi_turn)
             winners.append(winner)
             judgments.append(judgment)
         return winners, user_prompt, judgments
