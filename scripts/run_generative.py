@@ -21,21 +21,26 @@ from rewardbench.utils import calculate_scores_per_section
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, nargs="+", required=True)
-    parser.add_argument("--num_threads", type=int, default=10)
+    parser.add_argument("--chat_template", type=str, default=None)
+    parser.add_argument("--trust_remote_code", action="store_true", default=False)
+    parser.add_argument("--num_gpus", type=int, default=1)
+    parser.add_argument("--vllm_gpu_util", type=float, default=0.9)
+    parser.add_argument("--do_not_save", action="store_true")
     parser.add_argument("--pref_sets", action="store_true")
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--do_not_save", action="store_true")
+    parser.add_argument("--num_threads", type=int, default=10)
+    parser.add_argument("--disable_beaker_save", action="store_true")
+    parser.add_argument("--force_local", action="store_true", default=False)
     args = parser.parse_args()
     return args
 
 
 def main():
     args = get_args()
-    logger = logging.getLogger(__name__)
     logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
     logger.info(f"Running reward model on {args.model}")
 
-    # Load dataset
     dataset, subsets = load_eval_dataset(
         core_set=not args.pref_sets,
         conv=None,
@@ -53,7 +58,6 @@ def main():
         subsets = subsets[:10]
         ids = ids[:10]
 
-    # Run API inference
     def get_judgement(batch):
         prompt = batch["text_chosen"][0]["content"]
         answer_a = batch["text_chosen"]
@@ -84,7 +88,6 @@ def main():
     out_dataset = out_dataset.add_column("subset", subsets)
     out_dataset = out_dataset.add_column("id", ids)
 
-    # Compute lengths
     length_chosen = [len(" ".join([msg["content"] for msg in x])) for x in dataset["text_chosen"]]
     length_rejected = [len(" ".join([msg["content"] for msg in x])) for x in dataset["text_rejected"]]
     length_diff = [lc - lr for lc, lr in zip(length_chosen, length_rejected)]
@@ -92,7 +95,6 @@ def main():
     out_dataset = out_dataset.add_column("length_rejected", length_rejected)
     out_dataset = out_dataset.add_column("length_diff", length_diff)
 
-    # Calculate raw winrates
     model_name = args.model[0] if isinstance(args.model, list) else args.model
     results_grouped = {"model": model_name, "model_type": "Generative RM"}
     for subset in np.unique(subsets):
@@ -105,14 +107,13 @@ def main():
         leaderboard = calculate_scores_per_section(EXAMPLE_COUNTS, SUBSET_MAPPING, results_grouped)
         print(leaderboard)
 
-    # Inline Length-Controlled Evaluation
     print("\n--- Length-Controlled Winrate Estimation ---")
     df = pd.DataFrame({
         "win": out_dataset["results"],
         "length_diff": out_dataset["length_diff"],
         "instruction_id": out_dataset["id"]
     })
-    df = df[df["win"] != 0.5]  # remove ties
+    df = df[df["win"] != 0.5]
     df = pd.get_dummies(df, columns=["instruction_id"], drop_first=True)
     X = df.drop(columns=["win"])
     y = df["win"]
@@ -125,7 +126,6 @@ def main():
     raw_winrate = 100 * y.mean()
     print(f"📊 Raw Winrate (excluding ties): {raw_winrate:.2f}%")
 
-    # Optionally save
     if not args.do_not_save:
         scores_dict = out_dataset.to_dict()
         scores_dict["model"] = model_name
